@@ -1,0 +1,320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  OWNER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PropertyType {
+  PG
+  HOSTEL
+}
+
+enum GenderPreference {
+  MALE
+  FEMALE
+  ANY
+}
+
+enum PropertyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+model User {
+  id             String          @id @default(uuid()) @db.Char(36)
+  name           String          @db.VarChar(120)
+  email          String          @unique @db.VarChar(180)
+  passwordHash   String          @db.VarChar(255)
+  phone          String?         @db.VarChar(20)
+  role           UserRole
+  status         UserStatus      @default(ACTIVE)
+  studentProfile StudentProfile?
+  ownerProfile   OwnerProfile?
+  bookings       Booking[]       @relation("StudentBookings")
+  reviews        Review[]
+  favorites      Favorite[]
+  refreshTokens  RefreshToken[]
+  inquiries      PropertyInquiry[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([role])
+  @@index([status])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String   @db.Char(36)
+  tokenHash  String   @unique @db.VarChar(255)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model StudentProfile {
+  id             String   @id @default(uuid()) @db.Char(36)
+  userId         String   @unique @db.Char(36)
+  collegeName    String?  @db.VarChar(160)
+  courseName     String?  @db.VarChar(120)
+  preferredCity  String?  @db.VarChar(120)
+  guardianPhone  String?  @db.VarChar(20)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model OwnerProfile {
+  id              String     @id @default(uuid()) @db.Char(36)
+  userId          String     @unique @db.Char(36)
+  businessName    String?    @db.VarChar(160)
+  address         String?    @db.VarChar(255)
+  verificationId  String?    @db.VarChar(80)
+  isVerified      Boolean    @default(false)
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties      Property[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([isVerified])
+}
+
+model City {
+  id         String     @id @default(uuid()) @db.Char(36)
+  name       String     @db.VarChar(120)
+  slug       String     @unique @db.VarChar(140)
+  state      String     @db.VarChar(120)
+  isActive   Boolean    @default(true)
+  localities Locality[]
+  properties Property[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([isActive])
+}
+
+model Locality {
+  id         String     @id @default(uuid()) @db.Char(36)
+  cityId     String     @db.Char(36)
+  name       String     @db.VarChar(120)
+  slug       String     @db.VarChar(140)
+  isActive   Boolean    @default(true)
+  city       City       @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  properties Property[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([cityId, slug])
+  @@index([cityId])
+  @@index([isActive])
+}
+
+model Property {
+  id               String             @id @default(uuid()) @db.Char(36)
+  ownerId          String             @db.Char(36)
+  cityId           String             @db.Char(36)
+  localityId       String             @db.Char(36)
+  name             String             @db.VarChar(160)
+  slug             String             @unique @db.VarChar(190)
+  propertyType     PropertyType
+  description      String             @db.Text
+  addressLine      String             @db.VarChar(255)
+  latitude         Decimal            @db.Decimal(10, 7)
+  longitude        Decimal            @db.Decimal(10, 7)
+  monthlyRent      Decimal            @db.Decimal(10, 2)
+  securityDeposit  Decimal?           @db.Decimal(10, 2)
+  genderPreference GenderPreference
+  availableBeds    Int                @default(0)
+  totalBeds        Int
+  rules            String?            @db.Text
+  contactName      String?            @db.VarChar(120)
+  contactPhone     String?            @db.VarChar(20)
+  status           PropertyStatus     @default(PENDING)
+  isActive         Boolean            @default(true)
+  rejectionReason  String?            @db.VarChar(500)
+  owner            OwnerProfile       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  city             City               @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  locality         Locality           @relation(fields: [localityId], references: [id], onDelete: Restrict)
+  images           PropertyImage[]
+  amenities        PropertyAmenity[]
+  rooms            Room[]
+  bookings         Booking[]
+  reviews          Review[]
+  favorites        Favorite[]
+  inquiries        PropertyInquiry[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([ownerId])
+  @@index([cityId])
+  @@index([localityId])
+  @@index([status])
+  @@index([propertyType])
+  @@index([genderPreference])
+  @@index([monthlyRent])
+  @@index([isActive])
+  @@index([cityId, localityId, status, isActive])
+  @@index([cityId, propertyType, genderPreference, monthlyRent])
+}
+
+model PropertyInquiry {
+  id         String        @id @default(uuid()) @db.Char(36)
+  propertyId String        @db.Char(36)
+  studentId  String?       @db.Char(36)
+  name       String        @db.VarChar(120)
+  email      String        @db.VarChar(180)
+  phone      String?       @db.VarChar(20)
+  message    String?       @db.VarChar(800)
+  status     InquiryStatus @default(NEW)
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student    User?         @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([propertyId])
+  @@index([studentId])
+  @@index([status])
+}
+
+model Room {
+  id            String   @id @default(uuid()) @db.Char(36)
+  propertyId    String   @db.Char(36)
+  name          String   @db.VarChar(120)
+  occupancy     Int
+  totalBeds     Int
+  availableBeds Int
+  monthlyRent   Decimal  @db.Decimal(10, 2)
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([monthlyRent])
+}
+
+model PropertyImage {
+  id          String   @id @default(uuid()) @db.Char(36)
+  propertyId  String   @db.Char(36)
+  url         String   @db.VarChar(500)
+  storageKey  String?  @db.VarChar(255)
+  altText     String?  @db.VarChar(180)
+  sortOrder   Int      @default(0)
+  isCover     Boolean  @default(false)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([isCover])
+}
+
+model Amenity {
+  id         String            @id @default(uuid()) @db.Char(36)
+  name       String            @unique @db.VarChar(120)
+  slug       String            @unique @db.VarChar(140)
+  icon       String?           @db.VarChar(80)
+  isActive   Boolean           @default(true)
+  properties PropertyAmenity[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([isActive])
+}
+
+model PropertyAmenity {
+  propertyId String   @db.Char(36)
+  amenityId  String   @db.Char(36)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity    Amenity  @relation(fields: [amenityId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+
+  @@id([propertyId, amenityId])
+  @@index([amenityId])
+}
+
+model Booking {
+  id              String        @id @default(uuid()) @db.Char(36)
+  studentId       String        @db.Char(36)
+  propertyId      String        @db.Char(36)
+  status          BookingStatus @default(PENDING)
+  message         String?       @db.VarChar(500)
+  ownerResponse   String?       @db.VarChar(500)
+  requestedMoveIn DateTime?
+  respondedAt     DateTime?
+  student         User          @relation("StudentBookings", fields: [studentId], references: [id], onDelete: Restrict)
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  review          Review?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([studentId])
+  @@index([propertyId])
+  @@index([status])
+  @@index([propertyId, status])
+  @@index([studentId, propertyId, status])
+}
+
+model Review {
+  id         String   @id @default(uuid()) @db.Char(36)
+  studentId  String   @db.Char(36)
+  propertyId String   @db.Char(36)
+  bookingId  String   @unique @db.Char(36)
+  rating     Int
+  comment    String?  @db.Text
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([propertyId])
+  @@index([rating])
+}
+
+model Favorite {
+  id         String   @id @default(uuid()) @db.Char(36)
+  studentId  String   @db.Char(36)
+  propertyId String   @db.Char(36)
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([studentId, propertyId])
+  @@index([studentId])
+  @@index([propertyId])
+}
